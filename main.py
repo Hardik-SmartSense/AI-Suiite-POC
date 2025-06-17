@@ -5,6 +5,7 @@ import time
 
 import azure.cognitiveservices.speech as speechsdk
 import pandas as pd
+from azure.cognitiveservices.speech import AutoDetectSourceLanguageConfig
 from pydub import AudioSegment
 from pydub.playback import play
 
@@ -15,6 +16,7 @@ class SpeechService:
             subscription=os.environ["AZURE_SPEECH_SERVICE_KEY"],
             endpoint=os.environ["AZURE_SPEECH_SERVICE_ENDPOINT"]
         )
+        self.languages = ["en-US", "de-DE"]
 
     def speech_to_text(self, folder, file):
         audio_path = os.path.join(folder, file)
@@ -31,7 +33,9 @@ class SpeechService:
 
         recognizer = speechsdk.SpeechRecognizer(
             speech_config=self.speech_config,
-            audio_config=audio_cfg
+            audio_config=audio_cfg,
+            auto_detect_source_language_config=AutoDetectSourceLanguageConfig(
+                languages=self.languages)
         )
 
         start = time.time()
