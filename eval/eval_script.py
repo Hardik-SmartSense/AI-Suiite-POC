@@ -4,8 +4,8 @@ import random
 
 import pandas as pd
 
-from speech_service import SpeechService
-from text_eval import evaluate_text
+from services.speech_service import SpeechService
+from services.text_eval import evaluate_text
 
 
 def eval_speech_service(path):
