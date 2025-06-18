@@ -8,12 +8,13 @@ from pydub.playback import play
 
 
 class SpeechService:
-    def __init__(self):
+    def __init__(self, play_audio=True):
         self.speech_config = speechsdk.SpeechConfig(
             subscription=os.environ["AZURE_SPEECH_SERVICE_KEY"],
             endpoint=os.environ["AZURE_SPEECH_SERVICE_ENDPOINT"]
         )
         self.languages = ["en-US", "de-DE"]
+        self.play_audio = play_audio
 
     def speech_to_text(self, folder, file):
         audio_path = os.path.join(folder, file)
@@ -40,13 +41,14 @@ class SpeechService:
         resp["method_used"] = "CONTINUOUS_RECOGNITION"
         resp["processing_time"] = time.time() - start
 
-        print("Playing audio file: {}".format(file))
-        song = AudioSegment.from_wav(audio_path)
-        while True:
-            play(song)
-            accurate = input("Is) it accurate? (1/0): ")
-            if accurate in ("0", "1"):
-                break
+        if self.play_audio:
+            print("Playing audio file: {}".format(file))
+            song = AudioSegment.from_wav(audio_path)
+            while True:
+                play(song)
+                accurate = input("Is) it accurate? (1/0): ")
+                if accurate in ("0", "1"):
+                    break
 
         """
         while True:

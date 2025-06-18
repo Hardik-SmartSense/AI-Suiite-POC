@@ -5,6 +5,7 @@ import random
 import pandas as pd
 
 from speech_service import SpeechService
+from text_eval import evaluate_text
 
 
 def eval_speech_service():
@@ -32,8 +33,27 @@ def eval_speech_service():
     df = pd.json_normalize(final_resp)
     df.to_csv(f"static/output_{datetime.datetime.now()}.csv", index=False)
 
-def compare_transcriptions(folder_name):
-    return
+
+def eval_german_audio_transcriptions(folder="german_dataset",
+                                     csv_path="transcript.csv"):
+    service = SpeechService(play_audio=False)
+    df = pd.read_csv(os.path.join(folder, csv_path))
+
+    resp = []
+    max_sample = int(input("How many samples to process? : "))
+    for idx in range(max_sample):
+        file_row = df.sample(1).to_dict(orient="records")[0]
+        res = service.speech_to_text(folder=folder,
+                                     file=file_row["loc"])
+        res_transcript = res.get("text", "")
+        og_transcript = file_row["transcript"]
+        file_row["gen_transcript"] = res_transcript
+        file_row["word_error_rate"] = evaluate_text(og_transcript, res_transcript)
+        resp.append(file_row)
+
+    resp_df = pd.json_normalize(resp)
+    resp_df.to_csv(f"static/output_{datetime.datetime.now()}.csv",
+                   index=False)
 
 if __name__ == "__main__":
-    eval_speech_service()
+    eval_german_audio_transcriptions()
