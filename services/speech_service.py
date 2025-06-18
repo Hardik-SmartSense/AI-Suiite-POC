@@ -42,7 +42,7 @@ class SpeechService:
         start = time.time()
         resp.update(self._continue_recognition(recognizer))
         resp["method_used"] = "CONTINUOUS_RECOGNITION"
-        resp["processing_time"] = time.time() - start
+        resp["processing_time"] = round(time.time() - start, 2)
 
         if self.play_audio:
             print("Playing audio file: {}".format(audio_path))

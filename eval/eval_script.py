@@ -43,7 +43,7 @@ def eval_audio_transcriptions(path, csv_name):
         max_sample = len(df)
 
     for idx in range(int(max_sample)):
-        print("Processing file index:", idx)
+        print("Processing file index:", idx+1)
         file_row = df.iloc[idx].to_dict()
         res = service.speech_to_text(audio_path=file_row["audio_path"])
         gen_transcript = res.get("text", "")
@@ -51,7 +51,8 @@ def eval_audio_transcriptions(path, csv_name):
         file_row.update({
             "transcript": og_transcript,
             "gen_transcript": gen_transcript,
-            "word_error_rate": evaluate_text(og_transcript, gen_transcript)
+            "word_error_rate": evaluate_text(og_transcript, gen_transcript),
+            "time_taken": res.get("processing_time", 0.0),
         })
         resp.append(file_row)
         print(f"""
@@ -59,6 +60,7 @@ def eval_audio_transcriptions(path, csv_name):
         File Transcript: {og_transcript},
         Generated Transcript: {gen_transcript},
         File WER: {file_row["word_error_rate"]}
+        Time Taken: {res.get("processing_time", 0.0)} seconds,
         """)
         print("-" * 50)
 

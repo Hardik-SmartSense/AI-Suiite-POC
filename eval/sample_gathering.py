@@ -60,6 +60,6 @@ if __name__ == "__main__":
             subset="google/fleurs",
             language_code=lang,
             split="train",
-            count=50
+            count=1
         )
     save_to_csv(csv_rows, dataset_name="google/fleurs")
