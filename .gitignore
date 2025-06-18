@@ -37,6 +37,7 @@ venv/
 audio_files/
 static/
 german_dataset/
+fleurs_audio/
 
 # intellij configuration
 .idea

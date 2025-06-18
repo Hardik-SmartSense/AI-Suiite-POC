@@ -16,13 +16,11 @@ class SpeechService:
         self.languages = ["en-US", "de-DE"]
         self.play_audio = play_audio
 
-    def speech_to_text(self, folder, file):
-        audio_path = os.path.join(folder, file)
+    def speech_to_text(self, audio_path):
         audio_cfg = speechsdk.audio.AudioConfig(filename=audio_path)
 
         resp = {
-            "name": file,
-            "path": folder,
+            "name": audio_path,
             "status": "NOT_PROCESSED",
             "processing_time": 0.0,
             "method_used": "RECOGNIZE_ONCE",
@@ -42,7 +40,7 @@ class SpeechService:
         resp["processing_time"] = time.time() - start
 
         if self.play_audio:
-            print("Playing audio file: {}".format(file))
+            print("Playing audio file: {}".format(audio_path))
             song = AudioSegment.from_wav(audio_path)
             while True:
                 play(song)
