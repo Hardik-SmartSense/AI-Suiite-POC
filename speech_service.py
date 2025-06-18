@@ -7,6 +7,11 @@ from pydub import AudioSegment
 from pydub.playback import play
 
 
+# speech_config.set_property(
+#     property_id=speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguages,
+#     value="true")
+
+
 class SpeechService:
     def __init__(self, play_audio=True):
         self.speech_config = speechsdk.SpeechConfig(

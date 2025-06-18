@@ -38,6 +38,7 @@ audio_files/
 static/
 german_dataset/
 fleurs_audio/
+data/
 
 # intellij configuration
 .idea
