@@ -43,12 +43,6 @@ class VoiceApp:
             with st.expander("🔊 Step 4: Hear the Response"):
                 self.say_it_out()
 
-        st.divider()
-        if st.button("🔁 Replay Response"):
-            if st.session_state.model_response:
-                self.say_it_out()
-            else:
-                st.warning("⚠️ No response to replay.")
 
     def init_session(self):
         session_parameters = [
