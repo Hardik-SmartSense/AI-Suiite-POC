@@ -13,16 +13,11 @@ class OpenAIService:
             api_version=os.environ["OPENAI_API_VERSION"]
         )
 
-    def ask(self, user_prompt, temperature=0.5, max_tokens=300):
-        system_prompt = "You are an intelligent AI assistant. Respond clearly and concisely to user questions."
-
+    def ask(self, messages, temperature=0.5, max_tokens=300):
         start_time = time.time()
         response = self.client.chat.completions.create(
             model=self.deployment,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens
         )
