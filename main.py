@@ -3,6 +3,25 @@ import tempfile
 import streamlit as st
 from audiorecorder import audiorecorder
 
+from services.openai_service import OpenAIService
+from services.speech_service import SpeechService
+
+
+# -------------------------------
+# Cached Service Initializers
+# -------------------------------
+@st.cache_resource
+def get_speech_service():
+    return SpeechService(play_audio=False)
+
+@st.cache_resource
+def get_openai_service():
+    return OpenAIService()
+
+
+# -------------------------------
+# Tone Profiles
+# -------------------------------
 TONE_PROFILES = {
     "formal": "You are a professional and respectful AI assistant. Use a formal and informative tone. Avoid slang.",
     "friendly": "You are a cheerful and friendly AI assistant. Use an approachable and conversational tone. Feel free to use light humor.",
@@ -11,151 +30,86 @@ TONE_PROFILES = {
     "technical": "You are a highly knowledgeable technical assistant. Provide detailed, structured explanations, especially for developers."
 }
 
-@st.cache_resource
-def get_speech_service():
-    from services.speech_service import SpeechService
-    return SpeechService(play_audio=False)
+# -------------------------------
+# Streamlit App Logic
+# -------------------------------
+st.set_page_config(page_title="AI Voice Assistant", layout="centered")
+st.title("🎙️ AI Suite Voice Assistant")
+st.markdown(
+    "Talk to an AI using your voice. Record, transcribe, choose tone, and get spoken responses!")
 
+# -------------------------------
+# Init Session State
+# -------------------------------
+for key in ["recorded_audio", "transcript", "response", "tone"]:
+    if key not in st.session_state:
+        st.session_state[key] = None
 
-@st.cache_resource
-def get_openai_service():
-    from services.openai_service import OpenAIService
-    return OpenAIService()
+# -------------------------------
+# Record Audio
+# -------------------------------
+with st.expander("🎤 Step 1: Record Audio", expanded=True):
+    audio = audiorecorder("🎤 Start Recording", "⏹ Stop Recording")
+    if len(audio) > 0:
+        st.session_state.recorded_audio = audio
+        st.audio(audio.export(format="wav").read(), format="audio/wav")
+        st.write(f"⏱ Duration: `{audio.duration_seconds:.2f}` seconds")
+        st.success("✅ Audio recorded. Proceed to transcription.")
 
-class VoiceApp:
-    def __init__(self):
-        self.speech_service = get_speech_service()
-        self.openai_service = get_openai_service()
-        self.tone = st.selectbox(
-            "Choose Conversation Tone",
-            options=["formal", "friendly", "concise", "empathetic",
-                     "technical"],
-            index=1
-        )
-
-    def run(self):
-        st.set_page_config(page_title="AI Voice Assistant", layout="centered")
-        st.title("🎙️ AI Suite Voice Assistant")
-        st.markdown(
-            "Talk to an AI using your voice. Record, transcribe, get answers, and hear them back!")
-
-        self.init_session()
-
-        with st.expander("🎤 Step 1: Record Your Audio", expanded=True):
-            self.record_audio()
-
-        if st.session_state.recorded_audio:
-            with st.expander("📝 Step 2: Transcribe Audio"):
-                self.process_audio()
-
-        if st.session_state.audio_transcription:
-            with st.expander("🤖 Step 3: Talk to the Assistant"):
-                self.initiate_ai_assistant()
-
-        if st.session_state.model_response:
-            with st.expander("🔊 Step 4: Hear the Response"):
-                self.say_it_out()
-
-    def init_session(self):
-        print("Initializing session state...")
-        session_parameters = [
-            "recorded_audio",
-            "audio_transcription",
-            "model_response"
-        ]
-        for param in session_parameters:
-            if param not in st.session_state:
-                st.session_state[param] = None
-
-    def record_audio(self):
-        print("Recording audio...")
-        # Step 1: Record audio
-        st.subheader("Step 1: Record Your Audio")
-
-        audio = audiorecorder("🎤 Start Recording", "⏹ Stop Recording")
-
-        if len(audio) > 0:
-            st.session_state.recorded_audio = audio
-
-            # To play audio in frontend:
-            st.audio(audio.export(format="wav").read(), format="audio/wav")
-
-            # Show diagnostics
-            st.write(
-                f"⏱ Duration: `{audio.duration_seconds:.2f}` seconds"
-            )
-
-            st.success("✅ Audio recorded. Ready to process!")
-
-    def process_audio(self):
-        print("Processing audio...")
-        audio = st.session_state.get("recorded_audio")
-
-        if audio is None:
-            st.warning("⚠️ No audio recorded yet. Please record first.")
-        else:
-            with st.spinner("Transcribing audio..."):
-                # Export to a valid WAV file
+# -------------------------------
+# Transcribe Audio
+# -------------------------------
+if st.session_state.recorded_audio:
+    with st.expander("📝 Step 2: Transcribe Audio", expanded=True):
+        if st.button("📄 Transcribe"):
+            with st.spinner("Transcribing..."):
                 with tempfile.NamedTemporaryFile(delete=False,
-                                                 suffix=".wav") as temp_file:
-                    audio.export(temp_file.name, format="wav")
-                    valid_wav_path = temp_file.name
+                                                 suffix=".wav") as f:
+                    st.session_state.recorded_audio.export(f.name,
+                                                           format="wav")
+                    wav_path = f.name
 
-                    result = self.speech_service.speech_to_text(
-                        valid_wav_path)
-                    st.write("🧠 Transcript:",
-                             result.get('text', 'No text recognized'))
-                    st.write("⏱ Time Taken:",
-                             result.get('processing_time', 'N/A'),
-                             "seconds")
-                    st.session_state.audio_transcription = result.get('text')
+                speech = get_speech_service()
+                result = speech.speech_to_text(wav_path)
 
-                st.info(f"💾 Valid WAV file saved at:\n`{valid_wav_path}`")
+                st.session_state.transcript = result.get("text")
+                st.success("🧠 Transcription Complete")
+                st.write("Transcript:", st.session_state.transcript)
+                st.caption(
+                    f"🕒 Processing Time: {result.get('processing_time')}s")
 
-    def _build_prompt(self, user_input):
-        system_prompt = TONE_PROFILES.get(self.tone, TONE_PROFILES["friendly"])
-        return [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input}
-        ]
+# -------------------------------
+# Choose Tone & Generate Response
+# -------------------------------
+if st.session_state.transcript:
+    with st.expander("🎨 Step 3: Select Tone & Generate Response",
+                     expanded=True):
+        selected_tone = st.selectbox("Choose Tone", list(TONE_PROFILES.keys()),
+                                     index=1)
+        st.session_state.tone = selected_tone
 
-    def initiate_ai_assistant(self):
-        print("Initiating AI assistant...")
-        if st.session_state.recorded_audio is None:
-            return
-        if st.session_state.audio_transcription is None:
-            st.warning(
-                "⚠️ No transcription available. Please record and process audio first.")
-            return
+        if st.button("🤖 Generate Response"):
+            prompt = [
+                {"role": "system", "content": TONE_PROFILES[selected_tone]},
+                {"role": "user", "content": st.session_state.transcript}
+            ]
+            with st.spinner("Contacting Assistant..."):
+                openai = get_openai_service()
+                result = openai.ask(messages=prompt)
 
-        st.subheader("Step 2: AI Assistant Interaction")
-        with st.spinner("Loading AI assistant..."):
-            response = self.openai_service.ask(
-                messages=self._build_prompt(
-                    st.session_state.audio_transcription)
-            )
+                st.session_state.response = result["text"]
+                st.success("🎉 Assistant Response Received")
+                st.write("🧠 Response:", st.session_state.response)
+                st.caption(
+                    f"⏱ Time: {result['time_taken']}s, 🔢 Tokens: {result['tokens']}")
 
-            st.session_state.model_response = response["text"]
-
-            st.write("🧠 Assistant:", response["text"])
-            st.write("⏱ Time Taken:", response["time_taken"], "seconds")
-            st.write("🔢 Token Usage:", response["tokens"])
-            return
-
-    def say_it_out(self):
-        print("Speaking out loud...")
-        if st.session_state.audio_transcription is None:
-            return
-        if st.session_state.model_response is None:
-            st.warning(
-                "⚠️ No AI response available. Please interact with the AI assistant first.")
-            return
-
-        response_text = st.session_state.model_response
-        with st.spinner("Speaking out loud..."):
-            self.speech_service.text_to_speech(response_text)
-            st.success("✅ Done speaking!")
-
-if __name__ == "__main__":
-    app = VoiceApp()
-    app.run()
+# -------------------------------
+# Say it Out Loud
+# -------------------------------
+if st.session_state.response:
+    with st.expander("🔊 Step 4: Listen to Response", expanded=True):
+        if st.button("🔈 Speak Out"):
+            speech = get_speech_service()
+            with st.spinner("Speaking..."):
+                speech.text_to_speech(st.session_state.response)
+            st.success("✅ Done Speaking!")

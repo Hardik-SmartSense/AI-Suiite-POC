@@ -14,6 +14,8 @@ class OpenAIService:
         )
 
     def ask(self, messages, temperature=0.5, max_tokens=300):
+        print("-" * 100)
+        print("Asking OpenAI API...")
         start_time = time.time()
         response = self.client.chat.completions.create(
             model=self.deployment,

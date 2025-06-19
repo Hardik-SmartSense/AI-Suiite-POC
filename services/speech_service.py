@@ -18,6 +18,8 @@ class SpeechService:
         self.method = method.upper()
 
     def text_to_speech(self, text):
+        print("-" * 100)
+        print("Converting text to speech...")
         synthesizer = speechsdk.SpeechSynthesizer(
             speech_config=self.speech_config)
         result = synthesizer.speak_text_async(text).get()
@@ -28,6 +30,9 @@ class SpeechService:
             print("❌ Speech synthesis canceled:", cancellation.reason)
 
     def speech_to_text(self, audio_path):
+        print("-" * 100)
+        print("Converting speech to text...")
+
         audio_cfg = speechsdk.audio.AudioConfig(filename=audio_path)
 
         resp = {
