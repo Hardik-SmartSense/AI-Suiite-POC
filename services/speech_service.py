@@ -7,19 +7,15 @@ from pydub import AudioSegment
 from pydub.playback import play
 
 
-# speech_config.set_property(
-#     property_id=speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguages,
-#     value="true")
-
-
 class SpeechService:
-    def __init__(self, play_audio=True):
+    def __init__(self, play_audio=True, method="RECOGNIZE_ONCE"):
         self.speech_config = speechsdk.SpeechConfig(
             subscription=os.environ["AZURE_SPEECH_SERVICE_KEY"],
             endpoint=os.environ["AZURE_SPEECH_SERVICE_ENDPOINT"]
         )
         self.languages = ["en-US", "de-DE"]
         self.play_audio = play_audio
+        self.method = method.upper()
 
     def speech_to_text(self, audio_path):
         audio_cfg = speechsdk.audio.AudioConfig(filename=audio_path)
@@ -40,8 +36,12 @@ class SpeechService:
         )
 
         start = time.time()
-        resp.update(self._continue_recognition(recognizer))
-        resp["method_used"] = "CONTINUOUS_RECOGNITION"
+        if self.method == "RECOGNIZE_ONCE":
+            resp.update(self._recognize_once(recognizer))
+            resp["method_used"] = "RECOGNIZE_ONCE"
+        else:
+            resp.update(self._continue_recognition(recognizer))
+            resp["method_used"] = "CONTINUOUS_RECOGNITION"
         resp["processing_time"] = round(time.time() - start, 2)
 
         if self.play_audio:
