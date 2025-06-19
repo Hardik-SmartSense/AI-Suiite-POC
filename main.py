@@ -21,20 +21,34 @@ class VoiceApp:
         self.openai_service = get_openai_service()
 
     def run(self):
+        st.set_page_config(page_title="AI Voice Assistant", layout="centered")
         st.title("🎙️ AI Suite Voice Assistant")
+        st.markdown(
+            "Talk to an AI using your voice. Record, transcribe, get answers, and hear them back!")
 
         self.init_session()
-        self.record_audio()
-        self.process_audio()
-        self.initiate_ai_assistant()
-        self.say_it_out()
 
-        if st.button("🔁"):
-            if st.session_state.audio_transcription is None:
-                st.warning(
-                    "⚠️ No transcription available. Please record and process audio first.")
-            else:
+        with st.expander("🎤 Step 1: Record Your Audio", expanded=True):
+            self.record_audio()
+
+        if st.session_state.recorded_audio:
+            with st.expander("📝 Step 2: Transcribe Audio"):
+                self.process_audio()
+
+        if st.session_state.audio_transcription:
+            with st.expander("🤖 Step 3: Talk to the Assistant"):
+                self.initiate_ai_assistant()
+
+        if st.session_state.model_response:
+            with st.expander("🔊 Step 4: Hear the Response"):
                 self.say_it_out()
+
+        st.divider()
+        if st.button("🔁 Replay Response"):
+            if st.session_state.model_response:
+                self.say_it_out()
+            else:
+                st.warning("⚠️ No response to replay.")
 
     def init_session(self):
         session_parameters = [
