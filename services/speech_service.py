@@ -17,6 +17,16 @@ class SpeechService:
         self.play_audio = play_audio
         self.method = method.upper()
 
+    def text_to_speech(self, text):
+        synthesizer = speechsdk.SpeechSynthesizer(
+            speech_config=self.speech_config)
+        result = synthesizer.speak_text_async(text).get()
+        if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+            print("✅ Speech synthesized successfully.")
+        elif result.reason == speechsdk.ResultReason.Canceled:
+            cancellation = result.cancellation_details
+            print("❌ Speech synthesis canceled:", cancellation.reason)
+
     def speech_to_text(self, audio_path):
         audio_cfg = speechsdk.audio.AudioConfig(filename=audio_path)
 
