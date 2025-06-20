@@ -76,7 +76,7 @@ class VoiceAgentApp:
         if len(audio) > 0:
             st.session_state.recorded_audio = audio
             st.audio(audio.export(format="wav").read(), format="audio/wav")
-            st.toast("✅ Audio recorded. Proceed to transcription.")
+            st.toast("✅ Audio recorded!")
             return True
         return False
 
@@ -159,11 +159,10 @@ class VoiceAgentApp:
             st.session_state.output_path = output_path
 
         st.audio(output_path, format="audio/mp3")
-        st.toast(f"✅ Done Speaking, Tone: {tone}")
+        st.toast(f"✅ Generating Report!")
 
     def render_report(self):
-        with st.expander("📋 Final Interaction Report", expanded=False):
-            st.markdown("### 🧾 Summary Report")
+        with st.expander("📋 Final Interaction Report", expanded=True):
             st.markdown(f"""
             #### 🔊 Audio Summary
             - **Language Detected:** `{st.session_state.get('language', 'N/A')}`
