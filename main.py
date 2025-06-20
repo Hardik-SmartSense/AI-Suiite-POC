@@ -144,12 +144,15 @@ class VoiceAgentApp:
 
         if st.session_state.audio_updated:
             print("Cached TTS response found, skipping TTS call.")
+            st.audio(st.session_state.output_path, format="audio/mp3")
             return
 
         tone = st.session_state.selected_voice_tone
         with st.spinner("Speaking..."):
-            self.speech.text_to_speech(response, tone=tone)
+            output_path = self.speech.text_to_speech(response, tone=tone)
+            st.session_state.output_path = output_path
 
+        st.audio(output_path, format="audio/mp3")
         st.toast(f"✅ Done Speaking, Tone: {tone}")
 
     def render_report(self):

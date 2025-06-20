@@ -1,4 +1,5 @@
 import os
+import tempfile
 import time
 
 import azure.cognitiveservices.speech as speechsdk
@@ -17,8 +18,6 @@ class SpeechService:
             subscription=os.environ["AZURE_SPEECH_SERVICE_KEY"],
             endpoint=os.environ["AZURE_SPEECH_SERVICE_ENDPOINT"]
         )
-        self.audio_config = speechsdk.audio.AudioOutputConfig(
-            use_default_speaker=True)
         self.languages = ["en-US", "de-DE"]
         self.play_audio = play_audio
         self.method = method.upper()
@@ -41,13 +40,21 @@ class SpeechService:
             </voice>
         </speak>
         """
-        print(f"ssml : {ssml}")
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+            output_path = f.name
+        audio_config = speechsdk.audio.AudioOutputConfig(
+            use_default_speaker=True, filename=output_path)
 
         synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=self.speech_config, audio_config=self.audio_config)
+            speech_config=self.speech_config, audio_config=audio_config)
         result = synthesizer.speak_ssml_async(ssml).get()
+
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+            song = AudioSegment.from_wav(output_path)
+            play(song)
             print("✅ Speech synthesized successfully.")
+            return output_path
         elif result.reason == speechsdk.ResultReason.Canceled:
             cancellation = result.cancellation_details
             print("❌ Speech synthesis canceled:", cancellation.reason)
