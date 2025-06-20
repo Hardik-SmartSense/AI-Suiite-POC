@@ -6,28 +6,9 @@ from azure.cognitiveservices.speech import AutoDetectSourceLanguageConfig
 from pydub import AudioSegment
 from pydub.playback import play
 
-TONE_PROFILES = {
-    "formal": {
-        "ssml_style": "narration-professional",
-        "voice": "en-US-GuyNeural",
-    },
-    "friendly": {
-        "ssml_style": "cheerful",
-        "voice": "en-US-JennyNeural",
-    },
-    "concise": {
-        "ssml_style": None,  # No native style; simulate via faster rate
-        "voice": "en-US-DavisNeural",
-    },
-    "empathetic": {
-        "ssml_style": "empathetic",
-        "voice": "en-US-JennyNeural",
-    },
-    "technical": {
-        "ssml_style": "newscast",  # Optional — adds authoritative tone
-        "voice": "en-US-GuyNeural",
-    },
-}
+import constants
+
+TONE_PROFILES = constants.CONVERSATION_TONE_CONFIG
 
 
 class SpeechService:
@@ -46,20 +27,21 @@ class SpeechService:
         print("-" * 100)
         print("Converting text to speech...")
 
-        ssml_style = TONE_PROFILES.get(tone, {}).get("ssml_style")
-        voice = TONE_PROFILES.get(tone, {}).get("voice")
-
+        config = TONE_PROFILES.get(tone, TONE_PROFILES["friendly"])
         ssml = f"""
         <speak version='1.0' xml:lang='en-US'
                xmlns='http://www.w3.org/2001/10/synthesis'
                xmlns:mstts='https://www.w3.org/2001/mstts'>
-            <voice name='{voice}'>
-                <mstts:express-as style='{ssml_style}'>
-                    {text}
-                </mstts:express-as>
+            <voice name='{config["voice"]}'>
+                <prosody rate='{config["rate"]}' pitch='{config["pitch"]}'>
+                    <mstts:express-as style='{config["style"]}'>
+                        {text}
+                    </mstts:express-as>
+                </prosody>
             </voice>
         </speak>
         """
+        print(f"ssml : {ssml}")
 
         synthesizer = speechsdk.SpeechSynthesizer(
             speech_config=self.speech_config, audio_config=self.audio_config)
