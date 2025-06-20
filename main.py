@@ -34,7 +34,7 @@ class VoiceAgentApp:
 
     def init_session_state(self):
         default_key_paris = {
-            "audio_updated": True,
+            "audio_unchanged": True,
             "language": "en-US",
             "selected_tone": "friendly",
             "selected_voice_tone": "friendly",
@@ -71,11 +71,12 @@ class VoiceAgentApp:
 
     def record_audio(self):
         audio = audiorecorder("🎤 Start Recording", "⏹ Stop Recording")
-        st.session_state.audio_updated = (audio == st.session_state.recorded_audio)
+        st.session_state.audio_unchanged = (audio == st.session_state.recorded_audio)
         if len(audio) > 0:
             st.session_state.recorded_audio = audio
             st.audio(audio.export(format="wav").read(), format="audio/wav")
-            st.toast("✅ Audio recorded!")
+            if not st.session_state.audio_unchanged:
+                st.toast("✅ Audio recorded!")
             return True
         return False
 
@@ -84,7 +85,7 @@ class VoiceAgentApp:
         if not audio:
             return False
 
-        if st.session_state.audio_updated is False:
+        if st.session_state.audio_unchanged is False:
             with st.spinner("Transcribing..."):
                 with tempfile.NamedTemporaryFile(delete=False,
                                                  suffix=".wav") as f:
@@ -113,7 +114,7 @@ class VoiceAgentApp:
         if not transcript:
             return False
 
-        if st.session_state.audio_updated:
+        if st.session_state.audio_unchanged:
             print("Cached response found, skipping AI call.")
             st.write("🧠 Response:", st.session_state.response)
             return True
@@ -146,7 +147,7 @@ class VoiceAgentApp:
         if not response:
             return
 
-        if st.session_state.audio_updated:
+        if st.session_state.audio_unchanged:
             print("Cached TTS response found, skipping TTS call.")
             st.audio(st.session_state.output_path, format="audio/mp3")
             return
