@@ -1,4 +1,6 @@
+import html
 import os
+import re
 import tempfile
 import time
 
@@ -21,6 +23,32 @@ class SpeechService:
         self.method = method.upper()
         self.TONE_PROFILES = constants.CONVERSATION_TONE_CONFIG
 
+    def clean_text(self, text):
+        if not text:
+            return ""
+
+            # Escape basic XML entities for SSML safety
+        text = html.escape(text)
+
+        # Replace specific punctuation for better flow
+        replacements = {
+            r"&colon;": ",",  # ":" to comma (escaped colon from html.escape)
+            r"\.\.\.": "<break time='400ms'/>",  # Ellipsis to pause
+            r"--": "<break time='300ms'/>",  # Double dash as a break
+            r"\?": "?<break time='200ms'/>",  # Pause after question
+            r"!": "!<break time='250ms'/>",  # Pause after exclamation
+            r"\n+": "<break time='500ms'/>",  # Newlines to longer pause
+        }
+
+        for pattern, replacement in replacements.items():
+            text = re.sub(pattern, replacement, text)
+
+        # Normalize multiple spaces
+        text = re.sub(r"\s{2,}", " ", text).strip()
+
+        # Final SSML wrap
+        return text
+
     def text_to_speech(self, text, tone="friendly", lang="en-US"):
         print("-" * 100)
         print("Converting text to speech...")
@@ -34,7 +62,7 @@ class SpeechService:
             <voice name='{config["voice"]}'>
                 <prosody rate='{config["rate"]}' pitch='{config["pitch"]}'>
                     <mstts:express-as style='{config["style"]}'>
-                        {text}
+                        {self.clean_text(text)}
                     </mstts:express-as>
                 </prosody>
             </voice>
