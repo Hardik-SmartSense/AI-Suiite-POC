@@ -48,16 +48,20 @@ class SpeechService:
 
         synthesizer = speechsdk.SpeechSynthesizer(
             speech_config=self.speech_config, audio_config=audio_config)
+
+        start = time.time()
         result = synthesizer.speak_ssml_async(ssml).get()
+        time_taken = round(time.time() - start, 2)
 
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
             song = AudioSegment.from_wav(output_path)
             play(song)
             print("✅ Speech synthesized successfully.")
-            return output_path
+            return output_path, time_taken
         elif result.reason == speechsdk.ResultReason.Canceled:
             cancellation = result.cancellation_details
             print("❌ Speech synthesis canceled:", cancellation.reason)
+        return None, time_taken
 
     def speech_to_text(self, audio_path):
         print("-" * 100)

@@ -1,6 +1,5 @@
 import tempfile
 
-import langdetect
 import streamlit as st
 from audiorecorder import audiorecorder
 
@@ -154,9 +153,11 @@ class VoiceAgentApp:
 
         tone = st.session_state.selected_voice_tone
         with st.spinner("Speaking..."):
-            output_path = self.speech.text_to_speech(response, tone=tone,
+            output_path, time_taken = self.speech.text_to_speech(response,
+                                                                 tone=tone,
                                                      lang=st.session_state.language)
             st.session_state.output_path = output_path
+            st.session_state.speech_time = time_taken
 
         st.audio(output_path, format="audio/mp3")
         st.toast(f"✅ Generating Report!")
@@ -175,6 +176,7 @@ class VoiceAgentApp:
 
             ### 🎙 Voice Settings
             - **Voice Tone for TTS:** `{st.session_state.get('selected_voice_tone', 'N/A')}`
+            - **Speech Time:** `{st.session_state.get('speech_time', 'N/A')} sec`
             """)
 
     def run(self):
