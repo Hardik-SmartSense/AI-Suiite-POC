@@ -74,9 +74,10 @@ if st.session_state.recorded_audio:
 
                 st.session_state.transcript = result.get("text")
                 st.success("🧠 Transcription Complete")
-                st.write("Transcript:", st.session_state.transcript)
                 st.caption(
                     f"🕒 Processing Time: {result.get('processing_time')}s")
+        if st.session_state.transcript:
+            st.write("Transcript:", st.session_state.transcript)
 
 # -------------------------------
 # Choose Tone & Generate Response
@@ -99,17 +100,25 @@ if st.session_state.transcript:
 
                 st.session_state.response = result["text"]
                 st.success("🎉 Assistant Response Received")
-                st.write("🧠 Response:", st.session_state.response)
                 st.caption(
                     f"⏱ Time: {result['time_taken']}s, 🔢 Tokens: {result['tokens']}")
+        if st.session_state.response:
+            st.write("🧠 Response:", st.session_state.response)
 
 # -------------------------------
 # Say it Out Loud
 # -------------------------------
 if st.session_state.response:
     with st.expander("🔊 Step 4: Listen to Response", expanded=True):
+        selected_tone = st.selectbox("Choose Voice Tone",
+                                     list(TONE_PROFILES.keys()),
+                                     index=1)
+        st.session_state.tone = selected_tone
         if st.button("🔈 Speak Out"):
             speech = get_speech_service()
             with st.spinner("Speaking..."):
-                speech.text_to_speech(st.session_state.response)
+                speech.text_to_speech(
+                    text=st.session_state.response,
+                    tone=st.session_state.tone
+                )
             st.success("✅ Done Speaking!")

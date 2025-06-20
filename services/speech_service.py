@@ -6,6 +6,29 @@ from azure.cognitiveservices.speech import AutoDetectSourceLanguageConfig
 from pydub import AudioSegment
 from pydub.playback import play
 
+TONE_PROFILES = {
+    "formal": {
+        "ssml_style": "narration-professional",
+        "voice": "en-US-GuyNeural",
+    },
+    "friendly": {
+        "ssml_style": "cheerful",
+        "voice": "en-US-JennyNeural",
+    },
+    "concise": {
+        "ssml_style": None,  # No native style; simulate via faster rate
+        "voice": "en-US-DavisNeural",
+    },
+    "empathetic": {
+        "ssml_style": "empathetic",
+        "voice": "en-US-JennyNeural",
+    },
+    "technical": {
+        "ssml_style": "newscast",  # Optional — adds authoritative tone
+        "voice": "en-US-GuyNeural",
+    },
+}
+
 
 class SpeechService:
     def __init__(self, play_audio=True, method="RECOGNIZE_ONCE"):
@@ -13,16 +36,34 @@ class SpeechService:
             subscription=os.environ["AZURE_SPEECH_SERVICE_KEY"],
             endpoint=os.environ["AZURE_SPEECH_SERVICE_ENDPOINT"]
         )
+        self.audio_config = speechsdk.audio.AudioOutputConfig(
+            use_default_speaker=True)
         self.languages = ["en-US", "de-DE"]
         self.play_audio = play_audio
         self.method = method.upper()
 
-    def text_to_speech(self, text):
+    def text_to_speech(self, text, tone="friendly"):
         print("-" * 100)
         print("Converting text to speech...")
+
+        ssml_style = TONE_PROFILES.get(tone, {}).get("ssml_style")
+        voice = TONE_PROFILES.get(tone, {}).get("voice")
+
+        ssml = f"""
+        <speak version='1.0' xml:lang='en-US'
+               xmlns='http://www.w3.org/2001/10/synthesis'
+               xmlns:mstts='https://www.w3.org/2001/mstts'>
+            <voice name='{voice}'>
+                <mstts:express-as style='{ssml_style}'>
+                    {text}
+                </mstts:express-as>
+            </voice>
+        </speak>
+        """
+
         synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=self.speech_config)
-        result = synthesizer.speak_text_async(text).get()
+            speech_config=self.speech_config, audio_config=self.audio_config)
+        result = synthesizer.speak_ssml_async(ssml).get()
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
             print("✅ Speech synthesized successfully.")
         elif result.reason == speechsdk.ResultReason.Canceled:
