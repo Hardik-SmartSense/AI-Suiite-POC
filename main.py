@@ -1,5 +1,6 @@
 import tempfile
 
+import langdetect
 import streamlit as st
 from audiorecorder import audiorecorder
 
@@ -35,6 +36,7 @@ class VoiceAgentApp:
     def init_session_state(self):
         default_key_paris = {
             "audio_updated": True,
+            "language": "en-US",
             "selected_tone": "friendly",
             "selected_voice_tone": "friendly",
             "recorded_audio": None,
@@ -95,6 +97,8 @@ class VoiceAgentApp:
                 st.session_state.transcription_time = result.get(
                     "processing_time")
 
+                st.session_state.language = result.get("language", "en-US")
+
                 st.toast(
                     f"🧠 Transcription Done ({result.get('processing_time')}s)")
         else:
@@ -116,7 +120,8 @@ class VoiceAgentApp:
             return True
 
         tone = st.session_state.selected_tone
-        system_prompt = self.tone_profiles[tone]["prompt"]
+        system_prompt = self.tone_profiles[tone][st.session_state.language][
+            "prompt"]
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -149,7 +154,8 @@ class VoiceAgentApp:
 
         tone = st.session_state.selected_voice_tone
         with st.spinner("Speaking..."):
-            output_path = self.speech.text_to_speech(response, tone=tone)
+            output_path = self.speech.text_to_speech(response, tone=tone,
+                                                     lang=st.session_state.language)
             st.session_state.output_path = output_path
 
         st.audio(output_path, format="audio/mp3")
@@ -160,6 +166,7 @@ class VoiceAgentApp:
             st.markdown("### 🧾 Summary Report")
             st.markdown(f"""
             #### 🔊 Audio Summary
+            - **Language Detected:** `{st.session_state.get('language', 'N/A')}`
             - **Transcription Time:** `{st.session_state.get('transcription_time', 'N/A')} sec`
 
             #### 💬 AI Model Summary

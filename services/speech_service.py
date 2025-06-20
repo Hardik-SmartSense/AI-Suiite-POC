@@ -9,8 +9,6 @@ from pydub.playback import play
 
 import constants
 
-TONE_PROFILES = constants.CONVERSATION_TONE_CONFIG
-
 
 class SpeechService:
     def __init__(self, play_audio=True, method="RECOGNIZE_ONCE"):
@@ -21,12 +19,14 @@ class SpeechService:
         self.languages = ["en-US", "de-DE"]
         self.play_audio = play_audio
         self.method = method.upper()
+        self.TONE_PROFILES = constants.CONVERSATION_TONE_CONFIG
 
-    def text_to_speech(self, text, tone="friendly"):
+    def text_to_speech(self, text, tone="friendly", lang="en-US"):
         print("-" * 100)
         print("Converting text to speech...")
 
-        config = TONE_PROFILES.get(tone, TONE_PROFILES["friendly"])
+        config = self.TONE_PROFILES.get(tone, self.TONE_PROFILES["friendly"])[
+            lang]
         ssml = f"""
         <speak version='1.0' xml:lang='en-US'
                xmlns='http://www.w3.org/2001/10/synthesis'
@@ -71,6 +71,7 @@ class SpeechService:
             "processing_time": 0.0,
             "method_used": "RECOGNIZE_ONCE",
             "text": "",
+            "language": "en-US",
         }
 
         recognizer = speechsdk.SpeechRecognizer(
@@ -135,6 +136,9 @@ class SpeechService:
             resp.update({
                 "status": "Completed",
                 "text": speech_recognition_result.text,
+                "language": speech_recognition_result.properties.get(
+                    speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult
+                )
             })
         elif speech_recognition_result.reason == speechsdk.ResultReason.NoMatch:
             print("No speech could be recognized: {}".format(
