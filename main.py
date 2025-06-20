@@ -8,9 +8,9 @@ from services.openai_service import OpenAIService
 from services.speech_service import SpeechService
 
 
-# -------------------------------
-# Cached Service Initializers
-# -------------------------------
+# ---------------------------------------
+# Cached Service Loaders
+# ---------------------------------------
 @st.cache_resource
 def get_speech_service():
     return SpeechService(play_audio=False)
@@ -20,133 +20,171 @@ def get_openai_service():
     return OpenAIService()
 
 
-TONE_PROFILES = constants.CONVERSATION_TONE_CONFIG
+# ---------------------------------------
+# Voice Agent Class
+# ---------------------------------------
+class VoiceAgentApp:
+    def __init__(self):
+        self.speech = get_speech_service()
+        self.openai = get_openai_service()
+        self.tone_profiles = constants.CONVERSATION_TONE_CONFIG
 
+        self.init_session_state()
+        self.render_settings_panel()
 
-def render_settings_panel():
-    print("Rendering settings panel...")
-    st.sidebar.title("⚙️ Voice Assistant Settings")
+    def init_session_state(self):
+        default_key_paris = {
+            "audio_updated": True,
+            "selected_tone": "friendly",
+            "selected_voice_tone": "friendly",
+            "recorded_audio": None,
+            "transcript": None,
+            "response": None,
+            "transcription_time": None,
+            "prompt_result_time": None,
+            "prompt_tokens": None
+        }
+        for key, value in default_key_paris.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
 
-    with st.sidebar.expander("🗣️ Conversation Settings", expanded=True):
-        st.session_state.selected_tone = st.selectbox(
-            "Select AI Conversation Tone:",
-            options=list(TONE_PROFILES.keys()),
-            index=1,
-            key="tone_setting"
-        )
+    def render_settings_panel(self):
+        st.sidebar.title("⚙️ Voice Assistant Settings")
 
-        st.session_state.selected_voice_tone = st.selectbox(
-            "Select Voice Tone for TTS:",
-            options=list(TONE_PROFILES.keys()),
-            index=1,
-            key="voice_tone_setting"
-        )
+        with st.sidebar.expander("🗣️ Conversation Settings", expanded=True):
+            st.session_state.selected_tone = st.selectbox(
+                "Select AI Conversation Tone:",
+                options=list(self.tone_profiles.keys()),
+                index=1,
+                key="tone_setting"
+            )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("🎛️ Settings apply to upcoming interactions.")
+            st.session_state.selected_voice_tone = st.selectbox(
+                "Select Voice Tone for TTS:",
+                options=list(self.tone_profiles.keys()),
+                index=1,
+                key="voice_tone_setting"
+            )
 
+        st.sidebar.markdown("---")
 
-# -------------------------------
-# Streamlit App Logic
-# -------------------------------
-if __name__ == "__main__":
-    st.set_page_config(page_title="AI Voice Assistant", layout="centered")
-    st.title("🎙️ AI Suite Voice Assistant")
-    st.markdown(
-        "Talk to an AI using your voice. Record, transcribe, choose tone, and get spoken responses!")
-    render_settings_panel()
+    def record_audio(self):
+        audio = audiorecorder("🎤 Start Recording", "⏹ Stop Recording")
+        st.session_state.audio_updated = (audio == st.session_state.recorded_audio)
+        if len(audio) > 0:
+            st.session_state.recorded_audio = audio
+            st.audio(audio.export(format="wav").read(), format="audio/wav")
+            st.toast("✅ Audio recorded. Proceed to transcription.")
+            return True
+        return False
 
-# -------------------------------
-# Init Session State
-# -------------------------------
-for key in ["recorded_audio", "transcript", "response", "tone"]:
-    if key not in st.session_state:
-        st.session_state[key] = None
+    def transcribe_audio(self):
+        audio = st.session_state.get("recorded_audio")
+        if not audio:
+            return False
 
-# -------------------------------
-# Record Audio
-# -------------------------------
-with st.expander("🎤 Record Audio", expanded=True):
-    metadata = {}
-    audio = audiorecorder("🎤 Start Recording", "⏹ Stop Recording")
-    if len(audio) > 0:
-        st.session_state.recorded_audio = audio
-        st.audio(audio.export(format="wav").read(), format="audio/wav")
-        st.toast("✅ Audio recorded. Proceed to transcription.")
-        metadata.clear()
+        if st.session_state.audio_updated is False:
+            with st.spinner("Transcribing..."):
+                with tempfile.NamedTemporaryFile(delete=False,
+                                                 suffix=".wav") as f:
+                    audio.export(f.name, format="wav")
+                    wav_path = f.name
 
-    # -------------------------------
-    # Transcribe Audio
-    # -------------------------------
-    if st.session_state.recorded_audio:
-        with st.spinner("Transcribing..."):
-            with tempfile.NamedTemporaryFile(delete=False,
-                                             suffix=".wav") as f:
-                st.session_state.recorded_audio.export(f.name,
-                                                       format="wav")
-                wav_path = f.name
+                result = self.speech.speech_to_text(wav_path)
+                st.session_state.transcript = result.get("text")
+                st.session_state.transcription_time = result.get(
+                    "processing_time")
 
-            speech = get_speech_service()
-            result = speech.speech_to_text(wav_path)
+                st.toast(
+                    f"🧠 Transcription Done ({result.get('processing_time')}s)")
+        else:
+            print("Cached Transcript found, skipping AI call.")
 
-            st.session_state.transcript = result.get("text")
-            st.toast(
-                f"🧠 Transcription Done ({result.get('processing_time')}s)")
-            metadata["transcription_time"] = result.get('processing_time')
         if st.session_state.transcript:
             st.write("Transcript:", st.session_state.transcript)
+            return True
+        return False
 
-    # -------------------------------
-    # Choose Tone & Generate Response
-    # -------------------------------
-    if st.session_state.transcript:
-        selected_tone = st.session_state.selected_tone
-        system_prompt = TONE_PROFILES[selected_tone]["prompt"]
-        prompt = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": st.session_state.transcript}
-        ]
-        with st.spinner("Contacting Assistant..."):
-            openai = get_openai_service()
-            result = openai.ask(messages=prompt)
+    def get_response(self):
+        transcript = st.session_state.get("transcript")
+        if not transcript:
+            return False
 
-            st.session_state.response = result["text"]
-            st.toast("🎉 Assistant Response Received")
-            metadata.update({
-                "prompt_tone": selected_tone,
-                "prompt_result_time": result["time_taken"],
-                "prompt_tokens": result["tokens"],
-            })
-        if st.session_state.response:
+        if st.session_state.audio_updated:
+            print("Cached response found, skipping AI call.")
             st.write("🧠 Response:", st.session_state.response)
+            return True
 
-    # -------------------------------
-    # Say it Out Loud
-    # -------------------------------
-    if st.session_state.response:
-        speech = get_speech_service()
+        tone = st.session_state.selected_tone
+        system_prompt = self.tone_profiles[tone]["prompt"]
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": transcript}
+        ]
+
+        with st.spinner("Contacting Assistant..."):
+            result = self.openai.ask(messages=messages)
+
+        st.session_state.response = result["text"]
+        st.session_state.update({
+            "prompt_tone": tone,
+            "prompt_result_time": result["time_taken"],
+            "prompt_tokens": result["tokens"]
+        })
+
+        st.toast("🎉 Assistant Response Received")
+        st.write("🧠 Response:", st.session_state.response)
+        return True
+
+    def speak_response(self):
+        response = st.session_state.get("response")
+        if not response:
+            return
+
+        if st.session_state.audio_updated:
+            print("Cached TTS response found, skipping TTS call.")
+            return
+
+        tone = st.session_state.selected_voice_tone
         with st.spinner("Speaking..."):
-            speech.text_to_speech(
-                text=st.session_state.response,
-                tone=st.session_state.selected_voice_tone
-            )
-        st.toast(
-            f"✅ Done Speaking, Tone: {st.session_state.selected_voice_tone}!")
-        metadata["response_tone"] = st.session_state.selected_voice_tone
+            self.speech.text_to_speech(response, tone=tone)
 
-    if metadata:
+        st.toast(f"✅ Done Speaking, Tone: {tone}")
+
+    def render_report(self):
         with st.expander("📋 Final Interaction Report", expanded=False):
             st.markdown("### 🧾 Summary Report")
-
             st.markdown(f"""
             #### 🔊 Audio Summary
-            - **Transcription Time:** `{metadata.get('transcription_time', 'N/A')} sec`
-    
+            - **Transcription Time:** `{st.session_state.get('transcription_time', 'N/A')} sec`
+
             #### 💬 AI Model Summary
-            - **Tone Selected:** `{metadata.get('prompt_tone', 'N/A')}`
-            - **Response Time:** `{metadata.get('prompt_result_time', 'N/A')} sec`
-            - **Tokens Used:** `{metadata.get('prompt_tokens', 'N/A')}`
-            
-            ### Voice Settings
-            - **Voice Tone for TTS:** `{metadata.get('response_tone', 'N/A')}`
+            - **Tone Selected:** `{st.session_state.get('selected_tone', 'N/A')}`
+            - **Response Time:** `{st.session_state.get('prompt_result_time', 'N/A')} sec`
+            - **Tokens Used:** `{st.session_state.get('prompt_tokens', 'N/A')}`
+
+            ### 🎙 Voice Settings
+            - **Voice Tone for TTS:** `{st.session_state.get('selected_voice_tone', 'N/A')}`
             """)
+
+    def run(self):
+        st.set_page_config(page_title="AI Voice Assistant", layout="centered")
+        st.title("🎙️ AI Suite Voice Assistant")
+        st.markdown(
+            "Talk to an AI using your voice. Record, transcribe, choose tone, and get spoken responses!")
+        with st.expander("🎤 Record Audio", expanded=True):
+            if self.record_audio():
+                if self.transcribe_audio():
+                    if self.get_response():
+                        self.speak_response()
+                        self.render_report()
+
+
+# ---------------------------------------
+# Main
+# ---------------------------------------
+if __name__ == "__main__":
+    print("Initializing AI Voice Assistant...")
+    app = VoiceAgentApp()
+    app.run()
