@@ -27,40 +27,63 @@ class SpeechService:
         if not text:
             return ""
 
-            # Escape basic XML entities for SSML safety
+        # Preserve existing SSML tags before escaping
+        preserved_tags = {
+            "break": r"<break\s+[^>]*\/?>",
+            "emphasis": r"<\/?emphasis\s*[^>]*>"
+        }
+
+        # Temporarily replace valid SSML tags with placeholders
+        placeholders = {}
+        for tag, pattern in preserved_tags.items():
+            matches = re.findall(pattern, text)
+            for i, match in enumerate(matches):
+                key = f"__{tag.upper()}_{i}__"
+                placeholders[key] = match
+                text = text.replace(match, key)
+
+        # Escape other content
         text = html.escape(text)
 
-        # Replace specific punctuation for better flow
+        # Reinsert preserved SSML tags
+        for key, original_tag in placeholders.items():
+            text = text.replace(key, original_tag)
+
+        # Enrich punctuation for better SSML flow
         replacements = {
-            r"&colon;": ",",  # ":" to comma (escaped colon from html.escape)
-            r"\.\.\.": "<break time='400ms'/>",  # Ellipsis to pause
-            r"--": "<break time='300ms'/>",  # Double dash as a break
-            r"\?": "?<break time='200ms'/>",  # Pause after question
-            r"!": "!<break time='250ms'/>",  # Pause after exclamation
-            r"\n+": "<break time='500ms'/>",  # Newlines to longer pause
+            r"&colon;": ",",  # Escaped colon
+            r"\.\.\.": "<break time='400ms'/>",
+            r"--": "<break time='300ms'/>",
+            r"\?": "?<break time='200ms'/>",
+            r"!": "!<break time='250ms'/>",
+            r"\n+": "<break time='500ms'/>",
         }
 
         for pattern, replacement in replacements.items():
             text = re.sub(pattern, replacement, text)
 
-        # Normalize multiple spaces
+        # Normalize spaces
         text = re.sub(r"\s{2,}", " ", text).strip()
 
-        # Final SSML wrap
         return text
 
-    def text_to_speech(self, text, tone="friendly", lang="en-US"):
+    def text_to_speech(self, text, ssml_config, tone="friendly", lang="en-US"):
         print("-" * 100)
         print("Converting text to speech...")
 
         config = self.TONE_PROFILES.get(tone, self.TONE_PROFILES["friendly"])[
             lang]
+
+        print(f"Default config: {config}")
+        print(f"SSML config: {ssml_config}")
+
+        config.update(ssml_config)
         ssml = f"""
-        <speak version='1.0' xml:lang='en-US'
+        <speak version='1.0' xml:lang='{lang}'
                xmlns='http://www.w3.org/2001/10/synthesis'
                xmlns:mstts='https://www.w3.org/2001/mstts'>
             <voice name='{config["voice"]}'>
-                <prosody rate='{config["rate"]}' pitch='{config["pitch"]}'>
+                <prosody rate='{config["rate"]}' pitch='{config["pitch"]}' volume='{config["volume"]}'>
                     <mstts:express-as style='{config["style"]}'>
                         {self.clean_text(text)}
                     </mstts:express-as>
@@ -68,6 +91,7 @@ class SpeechService:
             </voice>
         </speak>
         """
+        print("SSML:", ssml)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             output_path = f.name
