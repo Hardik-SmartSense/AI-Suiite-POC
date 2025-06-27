@@ -1,10 +1,13 @@
 import copy
 import json
+import random
 import tempfile
 from datetime import datetime
 
 import streamlit as st
 from audiorecorder import audiorecorder
+from pydub import AudioSegment
+from pydub.playback import play
 
 import constants
 from services.openai_service import OpenAIService
@@ -28,7 +31,8 @@ def get_openai_service():
 # ---------------------------------------
 class VoiceAgentApp:
     def __init__(self):
-        self.SYSTEM_PROMPT_BASE = constants.SYSTEM_PROMPT_BASE
+        self.AZURE_SYSTEM_PROMPT_BASE = constants.AZURE_SYSTEM_PROMPT_BASE
+        self.OPENAI_SYSTEM_PROMPT_BASE = constants.OPENAI_SYSTEM_PROMPT_BASE
         self.speech = get_speech_service()
         self.openai = get_openai_service()
         self.tone_profiles = constants.CONVERSATION_TONE_CONFIG
@@ -49,7 +53,8 @@ class VoiceAgentApp:
             "transcription_time": None,
             "prompt_result_time": None,
             "prompt_tokens": None,
-            "conversation_history": []
+            "conversation_history": [],
+            "tts_service": None,
         }
         for key, value in default_key_paris.items():
             if key not in st.session_state:
@@ -57,6 +62,23 @@ class VoiceAgentApp:
 
     def render_settings_panel(self):
         st.sidebar.title("⚙️ Voice Assistant Settings")
+
+        with st.sidebar.expander("🔧 TTS Settings", expanded=True):
+            st.session_state.tts_service = st.selectbox(
+                "Select Voice Service for TTS:",
+                options=["Azure", "OpenAI"],
+                index=1,
+                key="tts_service_setting"
+            )
+
+            if st.session_state.tts_service == "OpenAI":
+                voice_options = ['nova']
+                st.session_state.openai_voice_option = st.selectbox(
+                    "Select Voice Service for TTS:",
+                    options=voice_options,
+                    index=random.randint(0, len(voice_options)-1),
+                    key="openai_voice_options"
+                )
 
         with st.sidebar.expander("🗣️ Conversation Settings", expanded=True):
             st.session_state.selected_tone = st.selectbox(
@@ -115,10 +137,13 @@ class VoiceAgentApp:
             return True
         return False
 
-    def _gen_system_prompt(self, tone):
-        system_prompt = self.SYSTEM_PROMPT_BASE
-        system_role = self.tone_profiles[tone][st.session_state.language][
-            "prompt"]
+    def _gen_system_prompt(self):
+        if st.session_state.tts_service == "OpenAI":
+            system_prompt = self.OPENAI_SYSTEM_PROMPT_BASE
+        else:
+            system_prompt = self.AZURE_SYSTEM_PROMPT_BASE[st.session_state.language]
+        system_role = self.tone_profiles[st.session_state.selected_tone][
+            st.session_state.language]["prompt"]
 
         chat_history = ""
         for history in st.session_state.get("conversation_history", [])[:3]:
@@ -138,6 +163,7 @@ class VoiceAgentApp:
         return system_prompt
 
     def get_response(self):
+        ssml_config = None
         transcript = st.session_state.get("transcript")
         if not transcript:
             return False
@@ -148,7 +174,7 @@ class VoiceAgentApp:
             return True
 
         tone = st.session_state.selected_tone
-        system_prompt = self._gen_system_prompt(tone)
+        system_prompt = self._gen_system_prompt()
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -158,12 +184,17 @@ class VoiceAgentApp:
         with st.spinner("Contacting Assistant..."):
             result = self.openai.ask(messages=messages)
 
-        result_json = json.loads(result["content"])
-        result_text = result_json.get("text")
-        ssml_config = result_json.get("ssml_config", {})
+        if st.session_state.tts_service == "OpenAI":
+            result_text = result["content"]
+            st.session_state.response = result_text
+            ssml_config = True
+        else:
+            result_json = json.loads(result["content"])
+            result_text = result_json.get("text")
+            ssml_config = result_json.get("ssml_config", {})
 
-        st.session_state.response = result_text
-        st.session_state.ssml_config = ssml_config
+            st.session_state.response = result_text
+            st.session_state.ssml_config = ssml_config
 
         st.session_state.update({
             "prompt_tone": tone,
@@ -187,14 +218,26 @@ class VoiceAgentApp:
 
         tone = st.session_state.selected_voice_tone
         with st.spinner("Speaking..."):
-            output_path, time_taken = self.speech.text_to_speech(
-                text=response,
-                ssml_config=ssml_config,
-                tone=tone,
-                lang=st.session_state.language
-            )
-            st.session_state.output_path = output_path
-            st.session_state.speech_time = time_taken
+            if st.session_state.tts_service == "OpenAI":
+                output_path = self.openai.speak(
+                    text=response,
+                    voice=st.session_state.openai_voice_option
+                )
+                song = AudioSegment.from_mp3(output_path)
+                st.session_state.output_path = output_path
+                st.session_state.speech_time = None
+            else:
+                output_path, time_taken = self.speech.text_to_speech(
+                    text=response,
+                    ssml_config=ssml_config,
+                    tone=tone,
+                    lang=st.session_state.language
+                )
+                song = AudioSegment.from_wav(output_path)
+                st.session_state.output_path = output_path
+                st.session_state.speech_time = time_taken
+
+            play(song)
 
         st.audio(output_path, format="audio/mp3")
         st.toast(f"✅ Generating Report!")
@@ -258,25 +301,25 @@ class VoiceAgentApp:
         st.markdown(
             "Talk to an AI using your voice. Record, transcribe, choose tone, and get spoken responses!")
 
-        # st.subheader("📝 Enter your message")
-        # user_input = st.text_area("Type your message here:", key="text_input")
-        #
-        # if user_input:
-        #     st.session_state.transcript = user_input
-        #     convo_timestamp = datetime.now()
-        #     if ssml_config := self.get_response():
-        #         self.speak_response(ssml_config)
-        #         self.render_report()
-        #         self.append_conversation_history(convo_timestamp)
+        st.subheader("📝 Enter your message")
+        user_input = st.text_area("Type your message here:", key="text_input")
 
-        with st.expander("🎤 Record Audio", expanded=True):
-            if self.record_audio():
-                convo_timestamp = datetime.now()
-                if self.transcribe_audio():
-                    if ssml_config := self.get_response():
-                        self.speak_response(ssml_config)
-                        self.render_report()
-                        self.append_conversation_history(convo_timestamp)
+        if user_input:
+            st.session_state.transcript = user_input
+            convo_timestamp = datetime.now()
+            if ssml_config := self.get_response():
+                self.speak_response(ssml_config)
+                self.render_report()
+                self.append_conversation_history(convo_timestamp)
+
+        # with st.expander("🎤 Record Audio", expanded=True):
+        #     if self.record_audio():
+        #         convo_timestamp = datetime.now()
+        #         if self.transcribe_audio():
+        #             if ssml_config := self.get_response():
+        #                 self.speak_response(ssml_config)
+        #                 self.render_report()
+        #                 self.append_conversation_history(convo_timestamp)
 
         self.render_history()
 

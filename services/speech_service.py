@@ -106,8 +106,6 @@ class SpeechService:
         time_taken = round(time.time() - start, 2)
 
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            song = AudioSegment.from_wav(output_path)
-            play(song)
             print("✅ Speech synthesized successfully.")
             return output_path, time_taken
         elif result.reason == speechsdk.ResultReason.Canceled:
