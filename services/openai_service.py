@@ -33,6 +33,7 @@ class OpenAIService:
         }
 
     def speak(self, text, voice="nova", instructions=None):
+        start_time = time.time()
         client = AzureOpenAI(
             api_key=os.environ["OPENAI_API_KEY"],
             azure_endpoint=os.environ["OPENAI_BASE_URL"],
@@ -44,12 +45,13 @@ class OpenAIService:
             input=text,
             instructions=instructions
         )
+        time_taken = round(time.time() - start_time)
         output_path = tempfile.mktemp(suffix=".mp3")
         with open(output_path, "wb") as f:
             f.write(response.content)
 
         print(f"✅ Audio saved to: {output_path}")
-        return output_path
+        return output_path, time_taken
 
 
 if __name__ == "__main__":

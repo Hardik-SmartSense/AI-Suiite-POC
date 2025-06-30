@@ -226,16 +226,14 @@ class VoiceAgentApp:
         tone = st.session_state.selected_voice_tone
         with st.spinner("Speaking..."):
             if st.session_state.tts_service == "OpenAI":
-                start_time = time.time()
-                output_path = self.openai.speak(
+                output_path, time_taken = self.openai.speak(
                     text=response,
                     voice=st.session_state.openai_voice_option,
                     instructions=ssml_config
                 )
+                st.session_state.speech_time = time_taken
                 song = AudioSegment.from_mp3(output_path)
                 st.session_state.output_path = output_path
-                st.session_state.speech_time = round(time.time() -
-                                                     start_time, 2)
             else:
                 output_path, time_taken = self.speech.text_to_speech(
                     text=response,
