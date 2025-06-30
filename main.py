@@ -77,7 +77,8 @@ class VoiceAgentApp:
                 st.session_state.openai_voice_option = st.selectbox(
                     "Select Voice Service for TTS:",
                     options=voice_options,
-                    index=random.randint(0, len(voice_options)-1),
+                    # index=random.randint(0, len(voice_options)-1),
+                    index=0,
                     key="openai_voice_options"
                 )
 
