@@ -2,6 +2,7 @@ import copy
 import json
 import random
 import tempfile
+import time
 from datetime import datetime
 
 import streamlit as st
@@ -72,7 +73,7 @@ class VoiceAgentApp:
             )
 
             if st.session_state.tts_service == "OpenAI":
-                voice_options = ['nova']
+                voice_options = ["alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"]
                 st.session_state.openai_voice_option = st.selectbox(
                     "Select Voice Service for TTS:",
                     options=voice_options,
@@ -184,12 +185,15 @@ class VoiceAgentApp:
         with st.spinner("Contacting Assistant..."):
             result = self.openai.ask(messages=messages)
 
+        result_json = json.loads(result["content"])
+
         if st.session_state.tts_service == "OpenAI":
-            result_text = result["content"]
+            result_text = result_json.get("response")
+            ssml_config = result_json.get("instructions", "")
+
             st.session_state.response = result_text
-            ssml_config = True
+            st.session_state.ssml_config = ssml_config
         else:
-            result_json = json.loads(result["content"])
             result_text = result_json.get("text")
             ssml_config = result_json.get("ssml_config", {})
 
@@ -219,13 +223,16 @@ class VoiceAgentApp:
         tone = st.session_state.selected_voice_tone
         with st.spinner("Speaking..."):
             if st.session_state.tts_service == "OpenAI":
+                start_time = time.time()
                 output_path = self.openai.speak(
                     text=response,
-                    voice=st.session_state.openai_voice_option
+                    voice=st.session_state.openai_voice_option,
+                    instructions=ssml_config
                 )
                 song = AudioSegment.from_mp3(output_path)
                 st.session_state.output_path = output_path
-                st.session_state.speech_time = None
+                st.session_state.speech_time = round(time.time() -
+                                                     start_time, 2)
             else:
                 output_path, time_taken = self.speech.text_to_speech(
                     text=response,

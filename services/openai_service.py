@@ -32,16 +32,17 @@ class OpenAIService:
             "content": response.choices[0].message.content
         }
 
-    def speak(self, text, voice="nova"):
+    def speak(self, text, voice="nova", instructions=None):
         client = AzureOpenAI(
-            api_key=os.environ["OPENAI_TTS_API_KEY"],
-            azure_endpoint=os.environ["OPENAI_TTS_MODEL_URL"],
+            api_key=os.environ["OPENAI_API_KEY"],
+            azure_endpoint=os.environ["OPENAI_BASE_URL"],
             api_version=os.environ["OPENAI_API_VERSION"]
         )
         response = client.audio.speech.create(
             model=os.environ["OPENAI_TTS_MODEL"],
             voice=voice,
-            input=text
+            input=text,
+            instructions=instructions
         )
         output_path = tempfile.mktemp(suffix=".mp3")
         with open(output_path, "wb") as f:
