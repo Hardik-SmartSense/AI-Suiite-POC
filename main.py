@@ -142,7 +142,7 @@ class VoiceAgentApp:
         if st.session_state.tts_service == "OpenAI":
             system_prompt = self.OPENAI_SYSTEM_PROMPT_BASE
         else:
-            system_prompt = self.AZURE_SYSTEM_PROMPT_BASE[st.session_state.language]
+            system_prompt = self.AZURE_SYSTEM_PROMPT_BASE
         system_role = self.tone_profiles[st.session_state.selected_tone][
             st.session_state.language]["prompt"]
 
@@ -159,6 +159,7 @@ class VoiceAgentApp:
         system_prompt = system_prompt.format(
             role=system_role,
             chat_history=chat_history,
+            language=st.session_state.language
         )
         print(f"system_prompt : {system_prompt}")
         return system_prompt
@@ -184,6 +185,7 @@ class VoiceAgentApp:
 
         with st.spinner("Contacting Assistant..."):
             result = self.openai.ask(messages=messages)
+        print(f"OpenAI response: {result}")
 
         result_json = json.loads(result["content"])
 
@@ -308,25 +310,25 @@ class VoiceAgentApp:
         st.markdown(
             "Talk to an AI using your voice. Record, transcribe, choose tone, and get spoken responses!")
 
-        st.subheader("📝 Enter your message")
-        user_input = st.text_area("Type your message here:", key="text_input")
+        # st.subheader("📝 Enter your message")
+        # user_input = st.text_area("Type your message here:", key="text_input")
+        #
+        # if user_input:
+        #     st.session_state.transcript = user_input
+        #     convo_timestamp = datetime.now()
+        #     if ssml_config := self.get_response():
+        #         self.speak_response(ssml_config)
+        #         self.render_report()
+        #         self.append_conversation_history(convo_timestamp)
 
-        if user_input:
-            st.session_state.transcript = user_input
-            convo_timestamp = datetime.now()
-            if ssml_config := self.get_response():
-                self.speak_response(ssml_config)
-                self.render_report()
-                self.append_conversation_history(convo_timestamp)
-
-        # with st.expander("🎤 Record Audio", expanded=True):
-        #     if self.record_audio():
-        #         convo_timestamp = datetime.now()
-        #         if self.transcribe_audio():
-        #             if ssml_config := self.get_response():
-        #                 self.speak_response(ssml_config)
-        #                 self.render_report()
-        #                 self.append_conversation_history(convo_timestamp)
+        with st.expander("🎤 Record Audio", expanded=True):
+            if self.record_audio():
+                convo_timestamp = datetime.now()
+                if self.transcribe_audio():
+                    if ssml_config := self.get_response():
+                        self.speak_response(ssml_config)
+                        self.render_report()
+                        self.append_conversation_history(convo_timestamp)
 
         self.render_history()
 
