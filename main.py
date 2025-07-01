@@ -295,7 +295,7 @@ class VoiceAgentApp:
 
                         ### 🎙 Voice Settings
                         - **Voice Tone for TTS:** `{history.get('selected_voice_tone', 'N/A')}`
-                        - **SSML Config:** `{st.session_state.get('ssml_config', {})}`
+                        - **SSML Config:** `{history.get('ssml_config', {})}`
                         - **Speech Time:** `{history.get('speech_time', 'N/A')} sec`
                     """)
                     if history.get('output_path'):
