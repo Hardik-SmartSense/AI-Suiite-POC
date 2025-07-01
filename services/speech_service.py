@@ -1,4 +1,7 @@
+import html
 import os
+import re
+import tempfile
 import time
 
 import azure.cognitiveservices.speech as speechsdk
@@ -6,28 +9,7 @@ from azure.cognitiveservices.speech import AutoDetectSourceLanguageConfig
 from pydub import AudioSegment
 from pydub.playback import play
 
-TONE_PROFILES = {
-    "formal": {
-        "ssml_style": "narration-professional",
-        "voice": "en-US-GuyNeural",
-    },
-    "friendly": {
-        "ssml_style": "cheerful",
-        "voice": "en-US-JennyNeural",
-    },
-    "concise": {
-        "ssml_style": None,  # No native style; simulate via faster rate
-        "voice": "en-US-DavisNeural",
-    },
-    "empathetic": {
-        "ssml_style": "empathetic",
-        "voice": "en-US-JennyNeural",
-    },
-    "technical": {
-        "ssml_style": "newscast",  # Optional — adds authoritative tone
-        "voice": "en-US-GuyNeural",
-    },
-}
+import constants
 
 
 class SpeechService:
@@ -36,39 +18,100 @@ class SpeechService:
             subscription=os.environ["AZURE_SPEECH_SERVICE_KEY"],
             endpoint=os.environ["AZURE_SPEECH_SERVICE_ENDPOINT"]
         )
-        self.audio_config = speechsdk.audio.AudioOutputConfig(
-            use_default_speaker=True)
         self.languages = ["en-US", "de-DE"]
         self.play_audio = play_audio
         self.method = method.upper()
+        self.TONE_PROFILES = constants.CONVERSATION_TONE_CONFIG
 
-    def text_to_speech(self, text, tone="friendly"):
+    def clean_text(self, text):
+        if not text:
+            return ""
+
+        # Preserve existing SSML tags before escaping
+        preserved_tags = {
+            "break": r"<break\s+[^>]*\/?>",
+            "emphasis": r"<\/?emphasis\s*[^>]*>"
+        }
+
+        # Temporarily replace valid SSML tags with placeholders
+        placeholders = {}
+        for tag, pattern in preserved_tags.items():
+            matches = re.findall(pattern, text)
+            for i, match in enumerate(matches):
+                key = f"__{tag.upper()}_{i}__"
+                placeholders[key] = match
+                text = text.replace(match, key)
+
+        # Escape other content
+        text = html.escape(text)
+
+        # Reinsert preserved SSML tags
+        for key, original_tag in placeholders.items():
+            text = text.replace(key, original_tag)
+
+        # Enrich punctuation for better SSML flow
+        replacements = {
+            r"&colon;": ",",  # Escaped colon
+            r"\.\.\.": "<break time='400ms'/>",
+            r"--": "<break time='300ms'/>",
+            r"\?": "?<break time='200ms'/>",
+            r"!": "!<break time='250ms'/>",
+            r"\n+": "<break time='500ms'/>",
+        }
+
+        for pattern, replacement in replacements.items():
+            text = re.sub(pattern, replacement, text)
+
+        # Normalize spaces
+        text = re.sub(r"\s{2,}", " ", text).strip()
+
+        return text
+
+    def text_to_speech(self, text, ssml_config, tone="friendly", lang="en-US"):
         print("-" * 100)
         print("Converting text to speech...")
 
-        ssml_style = TONE_PROFILES.get(tone, {}).get("ssml_style")
-        voice = TONE_PROFILES.get(tone, {}).get("voice")
+        config = self.TONE_PROFILES.get(tone, self.TONE_PROFILES["friendly"])[
+            lang]
 
+        print(f"Default config: {config}")
+        print(f"SSML config: {ssml_config}")
+
+        config.update(ssml_config)
         ssml = f"""
-        <speak version='1.0' xml:lang='en-US'
+        <speak version='1.0' xml:lang='{lang}'
                xmlns='http://www.w3.org/2001/10/synthesis'
                xmlns:mstts='https://www.w3.org/2001/mstts'>
-            <voice name='{voice}'>
-                <mstts:express-as style='{ssml_style}'>
-                    {text}
-                </mstts:express-as>
+            <voice name='{config["voice"]}'>
+                <prosody rate='{config["rate"]}' pitch='{config["pitch"]}' volume='{config["volume"]}'>
+                    <mstts:express-as style='{config["style"]}'>
+                        {self.clean_text(text)}
+                    </mstts:express-as>
+                </prosody>
             </voice>
         </speak>
         """
+        print("SSML:", ssml)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+            output_path = f.name
+        audio_config = speechsdk.audio.AudioOutputConfig(
+            use_default_speaker=True, filename=output_path)
 
         synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=self.speech_config, audio_config=self.audio_config)
+            speech_config=self.speech_config, audio_config=audio_config)
+
+        start = time.time()
         result = synthesizer.speak_ssml_async(ssml).get()
+        time_taken = round(time.time() - start, 2)
+
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
             print("✅ Speech synthesized successfully.")
+            return output_path, time_taken
         elif result.reason == speechsdk.ResultReason.Canceled:
             cancellation = result.cancellation_details
             print("❌ Speech synthesis canceled:", cancellation.reason)
+        return None, time_taken
 
     def speech_to_text(self, audio_path):
         print("-" * 100)
@@ -82,6 +125,7 @@ class SpeechService:
             "processing_time": 0.0,
             "method_used": "RECOGNIZE_ONCE",
             "text": "",
+            "language": "en-US",
         }
 
         recognizer = speechsdk.SpeechRecognizer(
@@ -146,6 +190,9 @@ class SpeechService:
             resp.update({
                 "status": "Completed",
                 "text": speech_recognition_result.text,
+                "language": speech_recognition_result.properties.get(
+                    speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult
+                )
             })
         elif speech_recognition_result.reason == speechsdk.ResultReason.NoMatch:
             print("No speech could be recognized: {}".format(
